@@ -25,11 +25,11 @@ class VRApp {
 
         this.webgl.xr.enabled = true;
 
-        //await this.webgl.xr.setSession(this.sess);
+        await this.webgl.xr.setSession(this.sess);
 
-        //this.webgl.setAnimationLoop(this.animate);
+        this.webgl.setAnimationLoop(this.animate);
 
-        //console.info("XR Initialized!");
+        console.info("XR Initialized!");
     }
 
     xrEnd() {
