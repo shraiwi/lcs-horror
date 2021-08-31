@@ -1,0 +1,97 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <script src="js/three.js"></script>
+    <script src="js/app.js"></script>
+
+    <script>
+
+        // utility
+        const $id = (id) => document.getElementById(id);
+
+        const UI = {
+            btnEnterVR: null,
+            canvasVRView: null,
+        };
+
+        const GlobalState = {
+            xrSessionTypes: ["immersive-vr", "inline"],
+            xrSessionType: null,
+            xrSession: null,
+            xrIsSupported: false,
+        };
+
+        const app = new VRApp();
+
+        // functions
+
+        const tryInitXR = async () => {
+            //console.info("Checking for WebXR");
+            if ("xr" in navigator) {
+                console.info("WebXR supported");
+                for (const xrSessionType of GlobalState.xrSessionTypes) {
+                    //console.info("Trying session \"%s\"", xrSessionType);
+                    try {
+                        if (await navigator.xr.isSessionSupported(xrSessionType)) {
+                            console.info("Session \"%s\" supported!", xrSessionType);
+
+                            UI.btnEnterVR.disabled = false;
+
+                            GlobalState.xrIsSupported = true;
+                            GlobalState.xrSessionType = xrSessionType;
+
+                            return;
+                        } 
+                        throw new Error();
+                    } catch {
+                        console.warn("Session \"%s\" not supported", xrSessionType);
+                    }
+                }
+            } else {
+                console.info("WebXR not supported");
+            }
+        }
+
+        const tryEnterXR = async () => {
+            if (GlobalState.xrIsSupported) {
+                GlobalState.xrSession = await navigator.xr.requestSession(
+                    GlobalState.xrSessionType, 
+                    { optionalFeatures: ["unbounded"], },
+                );
+                //console.info("Initialized WebXR session");
+
+                app.init(GlobalState.xrSession);
+            } else {
+                console.error("WebXR not supported!");
+            }
+        }
+
+        // setup
+
+        window.addEventListener("DOMContentLoaded", () => {
+            Object.assign(UI, {
+                btnEnterVR: $id("btn-enter-vr"),
+                canvasVRView: $id("canvas-vr-view"),
+            });
+
+            tryInitXR();
+        });
+
+    </script>
+
+    <button id="btn-enter-vr" onclick="tryEnterXR()" disabled>Enter XR</button>
+
+    <!--<canvas id="canvas-vr-view"></canvas>-->
+
+</body>
+
+</html>
