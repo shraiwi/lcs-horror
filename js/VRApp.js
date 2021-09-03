@@ -41,10 +41,11 @@ class VRApp {
 
         // create objects
         this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 10);
+        this.camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
         
         this.webgl = new THREE.WebGLRenderer();
         this.webgl.lastFrameTime = 0.0;
+        this.webgl.elapsedTime = 0.0;
 
         this.frameClock = new THREE.Clock();
 
@@ -63,13 +64,15 @@ class VRApp {
                 await Utils.loadShaderFolder("glsl/test", "glsl/lit_vertex.glsl"),
             );
             cubeMesh.onAfterRender = () => {
-                cubeMesh.rotation.y += Math.PI * 0.5 * this.webgl.lastFrameTime;
+                cubeMesh.position.y = Math.sin(this.webgl.elapsedTime) * 0.1 + 0.5;
+                cubeMesh.rotation.x += Math.sin(this.webgl.elapsedTime * 0.7) * 0.01 + Math.sin(this.webgl.elapsedTime * 0.6) * 0.01;
+                cubeMesh.rotation.z += Math.sin(this.webgl.elapsedTime * 0.8) * 0.02 - Math.sin(this.webgl.elapsedTime * 0.7) * 0.01;
             }
             this.scene.add(cubeMesh);
 
             // floor
             const floorMesh = new THREE.Mesh(
-                new THREE.PlaneGeometry(100, 100),
+                new THREE.PlaneGeometry(10, 10),
                 new THREE.MeshBasicMaterial({ color: 0x707070, }),
             );
             floorMesh.position.y = -1.0;
@@ -105,6 +108,8 @@ class VRApp {
     animate() {
         //this.frameClock.autoStart = true;
         this.webgl.lastFrameTime = this.frameClock.getDelta();
+        this.webgl.elapsedTime = this.frameClock.elapsedTime;
+
 
         this.webgl.render(this.scene, this.camera);
     }
