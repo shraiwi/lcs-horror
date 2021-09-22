@@ -1,19 +1,12 @@
 
 uniform vec3 vertexColor;
-uniform vec3 sunDirection;
-
-smooth out vec3 vert_ViewNormal;
-smooth out vec3 vert_WorldNormal;
-smooth out vec3 vert_Color;
-smooth out vec3 vert_NDC;
-smooth out vec3 vert_WorldPosition;
-
-smooth out float vert_LightIntensity;
-smooth out float vert_ReflectionIntensity;
+uniform float scale;
 
 void main() {
 
-    vert_WorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+    mat4 newModelMatrix = {
+        
+    }
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 

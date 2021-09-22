@@ -10,6 +10,95 @@ class Utils {
         mode: "cors",
     }
 
+    // fills a geometry with random values
+    static createRandomGeometry(numPoints, bounds) {
+        const geo = new THREE.BufferGeometry();
+
+        const randRanges = new THREE.Vector3().subVectors(bounds.max, bounds.min).toArray();
+        const randMin = bounds.min.toArray();
+
+        const points = new Float32Array(numPoints * 3);
+
+        for (let i = 0; i < points.length; i++) {
+            points[i] = Math.random() * randRanges[i % 3] + randMin[i % 3];
+        }
+
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
+
+        return geo;
+    }
+
+    // creates a quad geometry with four triangles, where each triangle's corners attach two adjascent corners of the quad with a central point at 0, 0, 0
+    static createQuadQuadGeometry(size = 1.0, centerColor = [0.0, 0.0, 0.0], edgeColor = [1.0, 1.0, 1.0]) {
+        const geo = new THREE.BufferGeometry();
+
+        const hs = size * 0.5;
+
+        geo.setAttribute("position", new THREE.Float32BufferAttribute([
+             hs,   0.0,  0.0,
+             0.0,  hs,   0.0,
+             0.0,  0.0,  0.0, // q1
+
+             0.0,  hs,   0.0,
+            -hs,   0.0,  0.0,
+             0.0,  0.0,  0.0, // q2
+
+            -hs,   0.0,  0.0,
+             0.0, -hs,   0.0,
+             0.0,  0.0,  0.0, // q3
+
+             0.0, -hs,   0.0,
+             hs,   0.0,  0.0,
+             0.0,  0.0,  0.0, // q4
+        ], 3));
+
+        geo.setAttribute("normal", new THREE.Float32BufferAttribute(
+            new Array(4).fill([0.0, 0.0, 1.0]).flat(), 
+            3
+        ));
+
+        geo.setAttribute("color", new THREE.Float32BufferAttribute(
+            new Array(4).fill([
+                ...edgeColor,
+                ...edgeColor,
+                ...centerColor
+            ]).flat(), 
+            3
+        ));
+
+        return geo;
+    }
+
+    static attachShadow(parent, size = 1, floorHeight = 0.001, parentHeight = 0.0) {
+        const shadowMesh = new THREE.Mesh(
+            Utils.createQuadQuadGeometry(1.0, [0.0, 0.0, 0.0], [0.1, 0.1, 0.1]),
+            new THREE.MeshBasicMaterial({ 
+                //transparent: true,
+				vertexColors: true,
+                blending: THREE.MultiplyBlending,
+            }),
+        );
+        
+        shadowMesh.originalParentHeight = parentHeight || parent.position.y;
+
+        shadowMesh.matrixAutoUpdate = false;
+        shadowMesh.updateMatrixWorld = (force) => {
+            if (shadowMesh.matrixAutoUpdate) shadowMesh.updateMatrix();
+            if (shadowMesh.matrixWorldNeedsUpdate || force) {
+                const sideSize = size / Math.abs(shadowMesh.parent.position.y - floorHeight);
+                shadowMesh.matrixWorld.set(
+                    sideSize,   0.0,        0.0,        0.0,
+                    0.0,        0.0,        sideSize,   floorHeight,
+                    0.0,        sideSize,   0.0,        0.0,
+                    0.0,        0.0,        0.0,        1.0,
+                );
+                shadowMesh.matrixWorldNeedsUpdate = false;
+            }
+        }
+
+        parent.attach(shadowMesh);
+    }
+
     // asynchronously loads a ShaderMaterial from a specific network location
     static async loadShaderFolder(folderUrl, vertUrl = null, fragUrl = null, opts = {}) {
         await Promise.all([
@@ -39,11 +128,30 @@ class Utils {
 class VRApp {
     constructor() {
 
+        const levelBounds = new THREE.Box3(
+            new THREE.Vector3(-5,  0, -5), 
+            new THREE.Vector3( 5,  5,  5)
+        );
+
+        const levelSize = new THREE.Vector3();
+        const levelCenter = new THREE.Vector3();
+
+        levelBounds.getSize(levelSize);
+        levelBounds.getCenter(levelCenter);
+
+        const levelFloorHeight = levelBounds.min.y;
+
         // create objects
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        this.camera.position.y = levelFloorHeight + 1;
         
-        this.webgl = new THREE.WebGLRenderer();
+        this.webgl = new THREE.WebGLRenderer({ antialias: true });
+
+        this.webgl.shadowMap.enabled = true;
+        this.webgl.shadowMap.type = THREE.PCFSoftShadowMap;
+
         this.webgl.lastFrameTime = 0.0;
         this.webgl.elapsedTime = 0.0;
 
@@ -53,29 +161,62 @@ class VRApp {
 
         this.camera.position.z = 2;
 
-        this.scene.background = new THREE.Color(0x505050);
+        this.scene.background = new THREE.Color(0x87dbff);
 
         // load scene asynchronously
         (async () => {
 
-            // spinning cube
-            const cubeMesh = new THREE.Mesh(
-                new THREE.IcosahedronGeometry(),
-                await Utils.loadShaderFolder("glsl/test", "glsl/lit_vertex.glsl"),
+            // lights
+
+            const sunLight = new THREE.DirectionalLight(0xffffff);
+            sunLight.position.z += 1
+            this.scene.add(sunLight);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+            this.scene.add(ambientLight);
+
+            const floorLight = new THREE.DirectionalLight(0xd000ff, 0.2);
+            floorLight.position.y = -1.0;
+            this.scene.add(floorLight);
+
+            // particles
+
+            const dustParticles = new THREE.Points(
+                Utils.createRandomGeometry(1000, levelBounds),
+                new THREE.PointsMaterial({ 
+                    color: 0x202020,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending,
+                    size: 0.02,
+                }),
             );
-            cubeMesh.onAfterRender = () => {
-                cubeMesh.position.y = Math.sin(this.webgl.elapsedTime) * 0.1 + 0.5;
-                cubeMesh.rotation.x += Math.sin(this.webgl.elapsedTime * 0.7) * 0.01 + Math.sin(this.webgl.elapsedTime * 0.6) * 0.01;
-                cubeMesh.rotation.z += Math.sin(this.webgl.elapsedTime * 0.8) * 0.02 - Math.sin(this.webgl.elapsedTime * 0.7) * 0.01;
+            this.scene.add(dustParticles);
+
+            // spinning icosahedron
+            const actionMesh = new THREE.Mesh(
+                new THREE.IcosahedronGeometry(0.5),
+                new THREE.MeshPhongMaterial({ 
+                    color: new THREE.Color(0x7fffff), 
+                    shininess: 60,
+                    flatShading: true,
+                }),
+            );
+
+            Utils.attachShadow(actionMesh, 1.0, levelFloorHeight + 0.001, 0.5);
+
+            actionMesh.onAfterRender = () => {
+                actionMesh.position.y = Math.sin(this.webgl.elapsedTime) * 0.2 + levelFloorHeight + 1;
+                actionMesh.rotation.x += Math.sin(this.webgl.elapsedTime * 0.7) * 0.01 + Math.sin(this.webgl.elapsedTime * 0.6) * 0.01;
+                actionMesh.rotation.z += Math.sin(this.webgl.elapsedTime * 0.8) * 0.02 - Math.sin(this.webgl.elapsedTime * 0.7) * 0.01;
             }
-            this.scene.add(cubeMesh);
+            this.scene.add(actionMesh);
 
             // floor
             const floorMesh = new THREE.Mesh(
-                new THREE.PlaneGeometry(10, 10),
-                new THREE.MeshBasicMaterial({ color: 0x707070, }),
+                new THREE.PlaneGeometry(levelSize.x, levelSize.z),
+                new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fff7f) }),
             );
-            floorMesh.position.y = -1.0;
+            floorMesh.position.y = levelFloorHeight;
             floorMesh.rotation.x = -Math.PI * 0.5;
 
             this.scene.add(floorMesh);
