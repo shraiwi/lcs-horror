@@ -165,7 +165,7 @@ class VRApp {
         this.frameClock = new THREE.Clock();
         this.gameClock = new THREE.Clock();
 
-        this.scene.background = new THREE.Color(0x87dbff);
+        this.scene.background = new THREE.Color(0x19007d);
 
         this.nodes = null;
 
@@ -200,8 +200,9 @@ class VRApp {
 
             setInterval(() => {
                 const elapsedTime = this.gameClock.getElapsedTime();
-                const waterLevel = Math.sin(elapsedTime * 1.2) * 0.3 + Math.sin(elapsedTime * 1.5) * 0.4 + 0.5;
+                const waterLevel = noiseAudio.waterLevel = Math.sin(elapsedTime * 1.2) * 0.3 + Math.sin(elapsedTime * 1.5) * 0.4 + 0.5;
                 noiseAudio.setVolume(Math.max(waterLevel * 0.5, 0.1));
+                
             }, 16 / 1000);
 
             window.addEventListener("click", () => {
@@ -259,14 +260,28 @@ class VRApp {
 
             // floor
             const floorMesh = this.nodes.floorMesh = new THREE.Mesh(
-                new THREE.PlaneGeometry(levelSize.x, levelSize.z),
-                new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd8a6) }),
+                new THREE.DodecahedronGeometry(2),
+                new THREE.MeshPhongMaterial({ color: new THREE.Color(0xffd8a6) }),
             );
-            floorMesh.position.y = levelFloorHeight;
-            floorMesh.rotation.x = -Math.PI * 0.5;
+            floorMesh.position.y = levelFloorHeight - 0.1;
+            floorMesh.geometry.scale(1.0, 1.0, 0.05);
+            floorMesh.geometry.rotateX(-Math.PI * 0.5);
 
             this.scene.add(floorMesh);
 
+            // water
+            const waterMesh = this.nodes.waterMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(50, 50),
+                new THREE.MeshPhongMaterial({ color: new THREE.Color(0x375578) }),
+            );
+
+            waterMesh.geometry.rotateX(-Math.PI * 0.5);
+
+            waterMesh.onAfterRender = () => {
+                waterMesh.position.y = this.nodes.noiseAudio.waterLevel * 0.2 - levelFloorHeight - 0.3;
+            }
+            
+            this.scene.add(waterMesh);
             //console.log(JSON.stringify(this.scene.toJSON()))
         })();
 
