@@ -165,7 +165,7 @@ class VRApp {
         this.frameClock = new THREE.Clock();
         this.gameClock = new THREE.Clock();
 
-        this.scene.background = new THREE.Color(0x19007d);
+        this.scene.background = new THREE.Color(0x8abdff);
 
         this.nodes = null;
 
@@ -241,7 +241,7 @@ class VRApp {
 
             // spinning icosahedron
             const actionMesh = this.nodes.actionMesh = new THREE.Mesh(
-                new THREE.IcosahedronGeometry(0.5),
+                new THREE.IcosahedronGeometry(0.2),
                 new THREE.MeshPhongMaterial({ 
                     color: new THREE.Color(0x7fffff), 
                     shininess: 60,
@@ -249,7 +249,7 @@ class VRApp {
                 }),
             );
 
-            Utils.attachShadow(actionMesh, 0.5, levelFloorHeight + 0.001, 0.5);
+            Utils.attachShadow(actionMesh, 0.2, levelFloorHeight + 0.001, 0.5);
 
             actionMesh.onAfterRender = () => {
                 actionMesh.position.y = Math.sin(this.webgl.elapsedTime) * 0.2 + levelFloorHeight + 1;
@@ -272,7 +272,15 @@ class VRApp {
             // water
             const waterMesh = this.nodes.waterMesh = new THREE.Mesh(
                 new THREE.PlaneGeometry(50, 50),
-                new THREE.MeshPhongMaterial({ color: new THREE.Color(0x375578) }),
+                new THREE.MeshPhongMaterial({ 
+                    color: new THREE.Color(0x495ab8), 
+                    shininess: 200,
+                    flatShading: true,
+                }),
+                /*new THREE.ShaderMaterial({ 
+                    //extensions: { fragDepth: true },
+                    ...Utils.loadShaders("glsl/water") 
+                }),*/
             );
 
             waterMesh.geometry.rotateX(-Math.PI * 0.5);

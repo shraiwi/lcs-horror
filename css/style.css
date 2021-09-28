@@ -1,7 +1,30 @@
+* { 
+    font-family: sans-serif;
+}
 
 html, body {
     margin: 0;
     padding: 0;
+}
+
+h1 {
+    margin: 0;
+}
+
+p {
+    margin: 0;
+}
+
+card {
+    /*padding: 12px;*/
+    display: inline-block;
+    padding: 12px;
+    margin: 12px;
+
+    background-color: white;
+    /*border: 5px dashed burlywood;*/
+    border-radius: 12px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.226);
 }
 
 canvas#canvas-vr-view {
