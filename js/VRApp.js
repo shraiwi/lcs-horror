@@ -99,8 +99,8 @@ class Utils {
         parent.attach(shadowMesh);
     }
 
-    // asynchronously loads a ShaderMaterial from a specific network location
-    static async loadShaderFolder(folderUrl, vertUrl = null, fragUrl = null, opts = {}) {
+    // asynchronously loads shaders from a specific network location
+    static async loadShaders(folderUrl, vertUrl = null, fragUrl = null, opts = {}) {
         await Promise.all([
             fetch(vertUrl || folderUrl + "/vert.glsl", Utils.SHADER_FETCH_OPTS).then(
                 async (res) => { 
@@ -121,7 +121,7 @@ class Utils {
                  }
             ),
         ]);
-        return new THREE.ShaderMaterial(opts);
+        return opts;
     }
 }
 
@@ -129,8 +129,8 @@ class VRApp {
     constructor() {
 
         const levelBounds = new THREE.Box3(
-            new THREE.Vector3(-5,  0, -5), 
-            new THREE.Vector3( 5,  5,  5)
+            new THREE.Vector3(-2,  0, -2), 
+            new THREE.Vector3( 2,  4,  2)
         );
 
         const levelSize = new THREE.Vector3();
@@ -141,47 +141,93 @@ class VRApp {
 
         const levelFloorHeight = levelBounds.min.y;
 
-        // create objects
+        // create camera
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
 
         this.camera.position.y = levelFloorHeight + 1;
-        
-        this.webgl = new THREE.WebGLRenderer({ antialias: true });
+        this.camera.position.z = levelBounds.max.z;
 
-        this.webgl.shadowMap.enabled = true;
-        this.webgl.shadowMap.type = THREE.PCFSoftShadowMap;
+        // create audio listener
+
+        this.listener = new THREE.AudioListener();
+        this.camera.add(this.listener);
+
+        // create renderer
+
+        this.webgl = new THREE.WebGLRenderer({ antialias: true });
 
         this.webgl.lastFrameTime = 0.0;
         this.webgl.elapsedTime = 0.0;
 
+        //this.effects = new THREE.EffectComposer(this.webgl);
+
         this.frameClock = new THREE.Clock();
-
-        // init scene
-
-        this.camera.position.z = 2;
+        this.gameClock = new THREE.Clock();
 
         this.scene.background = new THREE.Color(0x87dbff);
+
+        this.nodes = null;
 
         // load scene asynchronously
         (async () => {
 
+            this.nodes = {};
+            this.gameClock.start();
+
+            // audio
+
+            //const browserAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+            const noiseAudio = this.nodes.noiseAudio = new THREE.Audio(this.listener);
+
+            const noiseAudioSource = new AudioBuffer({
+                sampleRate: 16000,
+                length: 16000,
+                numberOfChannels: 1,
+            });//browserAudioCtx.createBuffer(1, noiseAudioSourceSampleCount, browserAudioCtx.sampleRate);
+            const noiseAudioSourceBuffer = noiseAudioSource.getChannelData(0);
+
+            for (let i = 0; i < noiseAudioSource.length; i++) {
+                noiseAudioSourceBuffer[i] = Math.random() * 2 - 1;
+                if (i > 0) {
+                    noiseAudioSourceBuffer[i] = noiseAudioSourceBuffer[i - 1] * 0.8 + noiseAudioSourceBuffer[i] * 0.2;
+                }
+            }
+
+            noiseAudio.setBuffer(noiseAudioSource);
+            noiseAudio.setLoop(true);
+
+            setInterval(() => {
+                const elapsedTime = this.gameClock.getElapsedTime();
+                const waterLevel = Math.sin(elapsedTime * 1.2) * 0.3 + Math.sin(elapsedTime * 1.5) * 0.4 + 0.5;
+                noiseAudio.setVolume(Math.max(waterLevel * 0.5, 0.1));
+            }, 16 / 1000);
+
+            window.addEventListener("click", () => {
+                noiseAudio.play();
+            })
+
+            // shaders
+
+            //const noisePass = new THREE.ShaderPass(await Utils.loadShaders("glsl/ss_noise"));
+
             // lights
 
-            const sunLight = new THREE.DirectionalLight(0xffffff);
+            const sunLight = this.nodes.sunLight = new THREE.DirectionalLight(0xffffff);
             sunLight.position.z += 1
             this.scene.add(sunLight);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+            const ambientLight = this.nodes.ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
             this.scene.add(ambientLight);
 
-            const floorLight = new THREE.DirectionalLight(0xd000ff, 0.2);
+            const floorLight = this.nodes.floorLight = new THREE.DirectionalLight(0xd000ff, 0.2);
             floorLight.position.y = -1.0;
             this.scene.add(floorLight);
 
             // particles
 
-            const dustParticles = new THREE.Points(
+            const dustParticles = this.nodes.dustParticles = new THREE.Points(
                 Utils.createRandomGeometry(1000, levelBounds),
                 new THREE.PointsMaterial({ 
                     color: 0x202020,
@@ -193,7 +239,7 @@ class VRApp {
             this.scene.add(dustParticles);
 
             // spinning icosahedron
-            const actionMesh = new THREE.Mesh(
+            const actionMesh = this.nodes.actionMesh = new THREE.Mesh(
                 new THREE.IcosahedronGeometry(0.5),
                 new THREE.MeshPhongMaterial({ 
                     color: new THREE.Color(0x7fffff), 
@@ -202,7 +248,7 @@ class VRApp {
                 }),
             );
 
-            Utils.attachShadow(actionMesh, 1.0, levelFloorHeight + 0.001, 0.5);
+            Utils.attachShadow(actionMesh, 0.5, levelFloorHeight + 0.001, 0.5);
 
             actionMesh.onAfterRender = () => {
                 actionMesh.position.y = Math.sin(this.webgl.elapsedTime) * 0.2 + levelFloorHeight + 1;
@@ -212,9 +258,9 @@ class VRApp {
             this.scene.add(actionMesh);
 
             // floor
-            const floorMesh = new THREE.Mesh(
+            const floorMesh = this.nodes.floorMesh = new THREE.Mesh(
                 new THREE.PlaneGeometry(levelSize.x, levelSize.z),
-                new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fff7f) }),
+                new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd8a6) }),
             );
             floorMesh.position.y = levelFloorHeight;
             floorMesh.rotation.x = -Math.PI * 0.5;
@@ -248,8 +294,14 @@ class VRApp {
 
     animate() {
         //this.frameClock.autoStart = true;
-        this.webgl.lastFrameTime = this.frameClock.getDelta();
-        this.webgl.elapsedTime = this.frameClock.elapsedTime;
+        const lastFrameTime = this.webgl.lastFrameTime = this.frameClock.getDelta();
+        const elapsedTime = this.webgl.elapsedTime = this.frameClock.elapsedTime;
+
+        if (this.nodes) {
+
+            
+
+        }
 
 
         this.webgl.render(this.scene, this.camera);
