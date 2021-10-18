@@ -70,18 +70,17 @@ class Utils {
     }
 
     static attachShadow(parent, size = 1, floorHeight = 0.001, parentHeight = 0.0) {
-        const shadowMesh = new THREE.Mesh(
+        const shadowMesh = new THREE.Mesh( // create a new shadow mesh
             Utils.createQuadQuadGeometry(1.0, [0.0, 0.0, 0.0], [0.1, 0.1, 0.1]),
             new THREE.MeshBasicMaterial({ 
-                //transparent: true,
 				vertexColors: true,
                 blending: THREE.MultiplyBlending,
             }),
         );
         
-        shadowMesh.originalParentHeight = parentHeight || parent.position.y;
+        shadowMesh.originalParentHeight = parentHeight || parent.position.y; // get the parent height, if it exists
 
-        shadowMesh.matrixAutoUpdate = false;
+        shadowMesh.matrixAutoUpdate = false; // disable auto-updating child position
         shadowMesh.updateMatrixWorld = (force) => {
             if (shadowMesh.matrixAutoUpdate) shadowMesh.updateMatrix();
             if (shadowMesh.matrixWorldNeedsUpdate || force) {
@@ -101,27 +100,46 @@ class Utils {
 
     // asynchronously loads shaders from a specific network location
     static async loadShaders(folderUrl, vertUrl = null, fragUrl = null, opts = {}) {
+        // wait for all promises to resolve
         await Promise.all([
-            fetch(vertUrl || folderUrl + "/vert.glsl", Utils.SHADER_FETCH_OPTS).then(
+            fetch(vertUrl || folderUrl + "/vert.glsl", Utils.SHADER_FETCH_OPTS).then( // on load vertex shader
                 async (res) => { 
-                    if (res.status === 200) {
-                        opts.vertexShader = await res.text();
-                        console.info("Loaded vertex shader from %s", res.url);
+                    if (res.status === 200) { // if the status is 200,
+                        opts.vertexShader = await res.text(); // download the response body
+                        console.info("Loaded vertex shader from %s", res.url); // log the shader as loaded
                     }
-                    else console.warn("Could not find vertex shader at %s", res.url);
+                    else console.warn("Could not find vertex shader at %s", res.url); // otherwise, log the shader as not loaded
                 }
             ),
-            fetch(fragUrl || folderUrl + "/frag.glsl", Utils.SHADER_FETCH_OPTS).then(
+            fetch(fragUrl || folderUrl + "/frag.glsl", Utils.SHADER_FETCH_OPTS).then( // on load fragment shader
                 async (res) => { 
-                    if (res.status === 200) {
-                        opts.fragmentShader = await res.text();
-                        console.info("Loaded fragment shader from %s", res.url);
+                    if (res.status === 200) { // if the status is 200,
+                        opts.fragmentShader = await res.text(); // download the response body
+                        console.info("Loaded fragment shader from %s", res.url); // log the shader as loaded
                     }
-                    else console.warn("Could not find fragment shader at %s", res.url);
+                    else console.warn("Could not find fragment shader at %s", res.url); // otherwise, log the shader as not loaded
                  }
             ),
         ]);
-        return opts;
+        return opts; // return the modified options object
+    }
+}
+
+class NoiseMachine {
+    constructor(amplitude = 1.0, ftop = 1.0, octaves = 5, dvol = 1.3) {
+        this.octaves = [];
+
+        for (let i = 0; i < octaves; i++) {
+            this.octaves.push([ftop * Math.pow(dvol, i), amplitude * (Math.random() * 2.0 - 1.0)]);
+        }
+    }
+
+    value(t) {
+        let retval = 0.0;
+        for (const [f, a] of this.octaves) {
+            retval += Math.sin(t * f) * a;
+        }
+        return retval
     }
 }
 
@@ -198,25 +216,22 @@ class VRApp {
             noiseAudio.setBuffer(noiseAudioSource);
             noiseAudio.setLoop(true);
 
+            const waterNoiseMachine = new NoiseMachine(0.2, 1.2, 2);
+
             setInterval(() => {
                 const elapsedTime = this.gameClock.getElapsedTime();
-                const waterLevel = noiseAudio.waterLevel = Math.sin(elapsedTime * 1.2) * 0.3 + Math.sin(elapsedTime * 1.5) * 0.4 + 0.5;
+                const waterLevel = noiseAudio.waterLevel = waterNoiseMachine.value(elapsedTime) + 0.5;
                 noiseAudio.setVolume(Math.max(waterLevel * 0.5, 0.1));
-                
             }, 16 / 1000);
 
             window.addEventListener("click", () => {
                 noiseAudio.play();
-            })
-
-            // shaders
-
-            //const noisePass = new THREE.ShaderPass(await Utils.loadShaders("glsl/ss_noise"));
+            });
 
             // lights
 
             const sunLight = this.nodes.sunLight = new THREE.DirectionalLight(0xffffff);
-            sunLight.position.z += 1
+            sunLight.position.z += 1;
             this.scene.add(sunLight);
 
             const ambientLight = this.nodes.ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
@@ -255,7 +270,7 @@ class VRApp {
                 actionMesh.position.y = Math.sin(this.webgl.elapsedTime) * 0.2 + levelFloorHeight + 1;
                 actionMesh.rotation.x += Math.sin(this.webgl.elapsedTime * 0.7) * 0.01 + Math.sin(this.webgl.elapsedTime * 0.6) * 0.01;
                 actionMesh.rotation.z += Math.sin(this.webgl.elapsedTime * 0.8) * 0.02 - Math.sin(this.webgl.elapsedTime * 0.7) * 0.01;
-            }
+            };
             this.scene.add(actionMesh);
 
             // floor
@@ -270,27 +285,43 @@ class VRApp {
             this.scene.add(floorMesh);
 
             // water
+            const waterLevelNoiseMachineX = new NoiseMachine(0.1, 0.5);
+            const waterLevelNoiseMachineZ = new NoiseMachine(0.1, 0.5);
+
             const waterMesh = this.nodes.waterMesh = new THREE.Mesh(
-                new THREE.PlaneGeometry(50, 50),
+                new THREE.PlaneGeometry(50, 50, 64, 64),
                 new THREE.MeshPhongMaterial({ 
                     color: new THREE.Color(0x495ab8), 
-                    shininess: 200,
+                    shininess: 0,
                     flatShading: true,
                 }),
-                /*new THREE.ShaderMaterial({ 
-                    //extensions: { fragDepth: true },
-                    ...Utils.loadShaders("glsl/water") 
-                }),*/
             );
-
+            waterMesh.position.y = -0.3;
             waterMesh.geometry.rotateX(-Math.PI * 0.5);
 
             waterMesh.onAfterRender = () => {
-                waterMesh.position.y = this.nodes.noiseAudio.waterLevel * 0.2 - levelFloorHeight - 0.3;
+                //waterMesh.position.y = this.nodes.noiseAudio.waterLevel * 0.2 - levelFloorHeight - 0.3;
+
+                const verts = waterMesh.geometry.getAttribute("position");
+
+                const [IX, IY, IZ] = [0, 1, 2];
+
+                for (let i = 0; i < verts.count; i++) {
+                    const VERTEX = verts.array.subarray(i * verts.itemSize, (i + 1) * verts.itemSize);
+                    VERTEX[IY] = 
+                        waterLevelNoiseMachineX.value(VERTEX[IX]) * Math.sin(this.webgl.elapsedTime)
+                        + waterLevelNoiseMachineZ.value(VERTEX[IZ] + this.webgl.elapsedTime);
+                }
+
+                verts.needsUpdate = true;
             }
             
             this.scene.add(waterMesh);
-            //console.log(JSON.stringify(this.scene.toJSON()))
+            
+            // sun
+
+
+            // clouds
         })();
 
         // init WebGL
@@ -319,13 +350,6 @@ class VRApp {
         //this.frameClock.autoStart = true;
         const lastFrameTime = this.webgl.lastFrameTime = this.frameClock.getDelta();
         const elapsedTime = this.webgl.elapsedTime = this.frameClock.elapsedTime;
-
-        if (this.nodes) {
-
-            
-
-        }
-
 
         this.webgl.render(this.scene, this.camera);
     }
