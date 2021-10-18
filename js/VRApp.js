@@ -319,7 +319,17 @@ class VRApp {
             this.scene.add(waterMesh);
             
             // sun
+            const sunMesh = this.nodes.waterMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(10, 10),
+                new THREE.MeshBasicMaterial({ 
+                    color: new THREE.Color(0xebe534), 
+                }),
+            );
+            sunMesh.position.y = 100;
+            sunMesh.position.z = -100;
+            sunMesh.geometry.rotateX(Math.PI * 0.25);
 
+            this.scene.add(sunMesh);
 
             // clouds
         })();
