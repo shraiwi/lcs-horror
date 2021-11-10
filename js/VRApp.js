@@ -270,6 +270,8 @@ class VRApp {
                 actionMesh.position.y = Math.sin(this.webgl.elapsedTime) * 0.2 + levelFloorHeight + 1;
                 actionMesh.rotation.x += Math.sin(this.webgl.elapsedTime * 0.7) * 0.01 + Math.sin(this.webgl.elapsedTime * 0.6) * 0.01;
                 actionMesh.rotation.z += Math.sin(this.webgl.elapsedTime * 0.8) * 0.02 - Math.sin(this.webgl.elapsedTime * 0.7) * 0.01;
+
+                actionMesh.scale.setScalar(Math.random() * 0.05 + noiseAudio.waterLevel * 1.5);
             };
             this.scene.add(actionMesh);
 
@@ -285,15 +287,15 @@ class VRApp {
             this.scene.add(floorMesh);
 
             // water
-            const waterLevelNoiseMachineX = new NoiseMachine(0.1, 0.5);
-            const waterLevelNoiseMachineZ = new NoiseMachine(0.1, 0.5);
+            const waterLevelNoiseMachineX = new NoiseMachine(0.1, 1.4);
+            const waterLevelNoiseMachineZ = new NoiseMachine(0.1, 1.4);
 
             const waterMesh = this.nodes.waterMesh = new THREE.Mesh(
-                new THREE.PlaneGeometry(50, 50, 64, 64),
+                new THREE.PlaneGeometry(100, 100, 64, 64),
                 new THREE.MeshPhongMaterial({ 
                     color: new THREE.Color(0x495ab8), 
-                    shininess: 0,
-                    flatShading: true,
+                    shininess: 150,
+                    //flatShading: true,
                 }),
             );
             waterMesh.position.y = -0.3;
@@ -306,14 +308,23 @@ class VRApp {
 
                 const [IX, IY, IZ] = [0, 1, 2];
 
+                const OCEANTIME = this.webgl.elapsedTime * 1.5;
+
                 for (let i = 0; i < verts.count; i++) {
                     const VERTEX = verts.array.subarray(i * verts.itemSize, (i + 1) * verts.itemSize);
+                    const D = Math.sqrt(VERTEX[IX] * VERTEX[IX] + VERTEX[IZ] * VERTEX[IZ]);
+                    const N = 0.5;
+                    const ATTEN = 1 - Math.pow(D / 50, N);
                     VERTEX[IY] = 
-                        waterLevelNoiseMachineX.value(VERTEX[IX]) * Math.sin(this.webgl.elapsedTime)
-                        + waterLevelNoiseMachineZ.value(VERTEX[IZ] + this.webgl.elapsedTime);
+                        (waterLevelNoiseMachineX.value(VERTEX[IX]) * Math.sin(OCEANTIME)
+                        + waterLevelNoiseMachineZ.value(VERTEX[IZ] + OCEANTIME));
+                    VERTEX[IY] *= ATTEN;
                 }
 
+                waterMesh.geometry.computeVertexNormals();
+
                 verts.needsUpdate = true;
+                
             }
             
             this.scene.add(waterMesh);
@@ -332,6 +343,25 @@ class VRApp {
             this.scene.add(sunMesh);
 
             // clouds
+
+            const cloudMeshes = this.nodes.cloudMeshes = [];
+
+            for (let i = 0; i < 10; i++) {
+                //const cloudMeshNoiseMachineZ = new NoiseMachine(0, 0.01);
+                const cloudMesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(Math.random() * 10 + 10, Math.random() * 10 + 10),
+                    new THREE.MeshBasicMaterial({ 
+                        color: new THREE.Color(0xffffff), 
+                    }),
+                );
+                cloudMesh.position.y = Math.random() * 5 + 20;
+                cloudMesh.position.x = Math.random() * 50 - 25;
+                cloudMesh.position.z = Math.random() * 50 - 25;
+                cloudMesh.geometry.rotateX(Math.PI * 0.5);
+    
+                this.scene.add(cloudMesh);
+                cloudMeshes.push(cloudMesh);
+            }
         })();
 
         // init WebGL
